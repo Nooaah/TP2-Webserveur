@@ -2,6 +2,7 @@ from flask import Flask
 from flask import request
 from flask import flash, redirect
 from flask import jsonify
+import json
 import sys
 import zipfile
 import hashlib
@@ -41,7 +42,11 @@ app.config['TEMP_ZIP_FOLDER'] = './temp_zip_folder/'
 
 @app.route('/extract', methods=["POST"])
 def extract():
+    #Création du fichier zip avec les fichiers aux mauvais code SHA-1
+    zipObj = zipfile.ZipFile('log_error_sha1_code_files.zip', 'w')
     if request.method == "POST":
+        print(request.form["json"])
+        jsonCodes = json.loads(request.form["json"])
         if 'file' not in request.files:
             flash('No file part')
             return redirect(request.url)
@@ -54,16 +59,28 @@ def extract():
         with zipfile.ZipFile(app.config['TEMP_ZIP_FOLDER'] + file.filename, "r") as zip_ref:
             zip_ref.extractall(UPLOAD_FOLDER)
         
-        for filename in os.listdir(UPLOAD_FOLDER + file.filename.split(".")[0]):
-            print(os.path.join(UPLOAD_FOLDER + file.filename.split(".")[0], filename))
-            sha1sum = hashlib.sha1()
-            with open(os.path.join(UPLOAD_FOLDER + file.filename.split(".")[0], filename), 'rb') as source:
-                block = source.read(2**16)
-                while len(block) != 0:
-                    sha1sum.update(block)
+        #Remove the .DS_Store and __MACOSX files for macOS
+        os.remove(UPLOAD_FOLDER + file.filename.split(".")[0] + "/.DS_Store")
+        os.rmdir(UPLOAD_FOLDER + "__MACOSX")
+        for index, filename in enumerate(os.listdir(UPLOAD_FOLDER + file.filename.split(".")[0])):
+            try:
+                index += 1
+                sha1sum = hashlib.sha1()
+                with open(os.path.join(UPLOAD_FOLDER + file.filename.split(".")[0], filename), 'rb') as source:
                     block = source.read(2**16)
-            print(sha1sum.hexdigest() + "\n")
-
+                    while len(block) != 0:
+                        sha1sum.update(block)
+                        block = source.read(2**16)
+                print("photo" + str(index), os.path.join(UPLOAD_FOLDER + file.filename.split(".")[0], filename), sha1sum.hexdigest())
+                if jsonCodes["photo" + str(index)] == sha1sum.hexdigest():
+                    print("SHA-1 Code is OK")
+                else:
+                    print("SHA-1 Code is not OK ! File is added to log_error_sha1_code_files.zip")
+                    zipObj.write(os.path.join(UPLOAD_FOLDER + file.filename.split(".")[0], filename))
+                    os.remove(os.path.join(UPLOAD_FOLDER + file.filename.split(".")[0], filename))
+            except:
+                break
+        zipObj.close()
     return "OK\n"
 
 
