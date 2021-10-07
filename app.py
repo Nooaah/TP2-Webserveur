@@ -13,6 +13,9 @@ from csv import writer
 
 app = Flask(__name__)
 
+# Github project :
+# https://github.com/Nooaah/TP2-Webserveur
+
 ###########################################
 ##    Compte Rendu PDF dans ce dossier   ##
 ##            CHATELAIN  NOAH            ##
@@ -56,29 +59,35 @@ def extract():
         if file.filename == '':
             flash('No selected file')
             return redirect(request.url)
+        # Enregistre le zip dans TEMP_ZIP_FOLDER le temps de l'extraction
         file.save(os.path.join(app.config['TEMP_ZIP_FOLDER'], file.filename))
 
+        # Extrait le zip envoyé de TEMP_ZIP_FOLDER dans le UPLOAD_FOLDER
         with zipfile.ZipFile(app.config['TEMP_ZIP_FOLDER'] + file.filename, "r") as zip_ref:
             zip_ref.extractall(UPLOAD_FOLDER)
 
         # Remove the .DS_Store and __MACOSX files for macOS
         os.remove(UPLOAD_FOLDER + file.filename.split(".")[0] + "/.DS_Store")
         os.rmdir(UPLOAD_FOLDER + "__MACOSX")
+
+        # Boucle pour chaque fichier de UPLOAD_FOLDER
         for index, filename in enumerate(os.listdir(UPLOAD_FOLDER + file.filename.split(".")[0])):
             try:
                 index += 1
+                # Récupération du checksum sha1
                 sha1sum = hashlib.sha1()
                 with open(os.path.join(UPLOAD_FOLDER + file.filename.split(".")[0], filename), 'rb') as source:
                     block = source.read(2**16)
                     while len(block) != 0:
                         sha1sum.update(block)
                         block = source.read(2**16)
+                # Log terminal
                 print("\nphoto" + str(index), os.path.join(UPLOAD_FOLDER +
                       file.filename.split(".")[0], filename), sha1sum.hexdigest())
+
                 # Vérifie si le fichier existe déjà dans la base de donnée
                 # Si non, alors on l'ajout avec son nom, code sha1, date de validation, si le sha1 correspond
                 if checkIfFileExistInDatabase(filename) == False:
-                    print('ok')
                     conn = sqlite3.connect('database.db')
                     cursor = conn.cursor()
                     oneRecord = [filename, sha1sum.hexdigest(), str(date.today().strftime(
@@ -87,27 +96,23 @@ def extract():
                         'INSERT INTO files(filename, sha1, validation_date, isOk) VALUES (?,?,?,?)', oneRecord)
                     conn.commit()
                     conn.close()
-                    
-                    List=[filename, sha1sum.hexdigest(), str(date.today().strftime(
-                            "%d/%m/%Y")), bool(jsonCodes["photo" + str(index)] == sha1sum.hexdigest())]
+
+                    # Ajout à la fin du fichier files.csv la ligne contenant les infos du fichier
+                    List = [filename, sha1sum.hexdigest(), str(date.today().strftime(
+                        "%d/%m/%Y")), bool(jsonCodes["photo" + str(index)] == sha1sum.hexdigest())]
                     with open('files.csv', 'a') as f_object:
                         writer_object = writer(f_object)
                         writer_object.writerow(List)
                         f_object.close()
-                        
-                    """
-                    with open('files.csv', 'w', newline='') as csvfile:
-                        writer = csv.writer(csvfile)
-                        writer.writerow((filename, sha1sum.hexdigest(), str(date.today().strftime(
-                            "%d/%m/%Y")), bool(jsonCodes["photo" + str(index)] == sha1sum.hexdigest())))
-                    """
-                    
-
+                
+                # Log terminal
                 if jsonCodes["photo" + str(index)] == sha1sum.hexdigest():
                     print("✅", filename, "SHA-1 Code is OK")
                 else:
                     print(
                         "❌", filename, "SHA-1 Code is not OK ! File is added to log_error_sha1_code_files.zip")
+                    # Suppression du fichier de UPLOAD_FOLDER si le checksum n'est pas identique
+                    # Et ajout au fichier zip : log_error_sha1_code_files.zip
                     zipObj.write(os.path.join(UPLOAD_FOLDER +
                                  file.filename.split(".")[0], filename))
                     os.remove(os.path.join(UPLOAD_FOLDER +
@@ -119,11 +124,13 @@ def extract():
         zipObj.close()
     return "OK\n"
 
+# Route permettant au client de télécharger directement le fichier files.csv
 @app.route('/download')
-def downloadFile ():
+def downloadFile():
     path = "./files.csv"
     return send_file(path, as_attachment=True)
 
+# Route de test d'installation
 @app.route('/bonjour')
 def bonjour():
     return 'Hello World\n'
