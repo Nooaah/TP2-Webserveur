@@ -1,7 +1,7 @@
 from sqlite3.dbapi2 import Error
 from flask import Flask
 from flask import request
-from flask import flash, redirect
+from flask import flash, redirect, send_file
 import json
 import zipfile
 import hashlib
@@ -119,6 +119,10 @@ def extract():
         zipObj.close()
     return "OK\n"
 
+@app.route('/download')
+def downloadFile ():
+    path = "./files.csv"
+    return send_file(path, as_attachment=True)
 
 @app.route('/bonjour')
 def bonjour():
